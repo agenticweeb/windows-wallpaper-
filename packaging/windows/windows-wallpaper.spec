@@ -4,7 +4,7 @@ from PyInstaller.utils.hooks import collect_submodules
 hiddenimports = collect_submodules('PIL')
 
 analysis = Analysis(
-    ['../../src/windows_wallpaper/__main__.py'],
+    ['../../src/windows_wallpaper_launcher.py'],
     pathex=['../../src'],
     binaries=[],
     datas=[],
