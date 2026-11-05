@@ -37,3 +37,13 @@ def test_download_rejects_unsafe_urls(tmp_path):
         download_image("file:///etc/passwd", tmp_path / "x.jpg")
     with pytest.raises(ValueError):
         download_image("https://user:pass@example.com/x.jpg", tmp_path / "x.jpg")
+
+
+def test_catalog_reconciles_deleted_local_images(tmp_path):
+    catalog = Catalog(tmp_path / "db.sqlite3")
+    image = tmp_path / "Summer.JPG"
+    catalog.upsert_image(str(image), "local", 1920, 1080, 100)
+    assert len(catalog.list_images(["local"], pattern="summer")) == 1
+    assert catalog.reconcile_local(set()) == 1
+    assert catalog.list_images(["local"]) == []
+    catalog.close()

@@ -62,6 +62,13 @@ class Catalog:
         with self._lock, self.conn:
             self.conn.execute("UPDATE images SET bad=1 WHERE path=?", (path,))
 
+    def reconcile_local(self, valid_paths: set[str]) -> int:
+        with self._lock, self.conn:
+            rows = self.conn.execute("SELECT path FROM images WHERE source='local'").fetchall()
+            stale = [row[0] for row in rows if row[0] not in valid_paths]
+            self.conn.executemany("DELETE FROM images WHERE path=? AND source='local'", ((path,) for path in stale))
+        return len(stale)
+
     def list_images(self, sources: list[str], min_width: int = 0, landscape: bool = False, pattern: str = "", max_bytes: int = 0) -> list[sqlite3.Row]:
         if not sources:
             return []
@@ -72,7 +79,7 @@ class Catalog:
         if max_bytes: clauses.append("bytes <= ?"); args.append(max_bytes)
         if pattern:
             escaped = pattern.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-            clauses.append("path LIKE ? ESCAPE '\\'"); args.append(f"%{escaped}%")
+            clauses.append("LOWER(path) LIKE LOWER(?) ESCAPE '\\'"); args.append(f"%{escaped}%")
         query = "SELECT * FROM images WHERE " + " AND ".join(clauses) + " ORDER BY last_used ASC, RANDOM()"
         with self._lock:
             return list(self.conn.execute(query, args))

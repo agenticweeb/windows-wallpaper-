@@ -45,7 +45,7 @@ windows-wallpaper --resume
 windows-wallpaper --version
 ```
 
-The first launch opens the settings window. Add one or more folders, choose an interval, uncheck **Pause rotation**, and press **Next** once to verify Windows integration. Closing the window hides it; use the **Quit** button to exit. User data is stored under `%LOCALAPPDATA%\WindowsWallpaper` when installed. Portable mode stores data under `data` beside the executable.
+The first launch opens the settings window. Add one or more folders, choose an interval, uncheck **Pause rotation**, and press **Next** once to verify Windows integration. Closing the window hides it while rotation continues; launching Windows Wallpaper again restores the existing window. The CLI controls `--next`, `--previous`, `--pause`, and `--resume` are sent to that same running instance. Use the **Quit** button to exit completely. User data is stored under `%LOCALAPPDATA%\WindowsWallpaper` when installed. Portable mode stores data under `data` beside the executable.
 
 ## Building the Windows release
 

@@ -7,6 +7,7 @@ from tkinter import filedialog, messagebox, ttk
 
 from .app import WallpaperApp
 from . import __version__
+from .ipc import IPC
 
 
 class MainWindow:
@@ -23,7 +24,9 @@ class MainWindow:
         self.pattern = tk.StringVar(value=app.pattern)
         self.landscape = tk.BooleanVar(value=app.landscape)
         self.paused = tk.BooleanVar(value=app.paused)
+        self.ipc = IPC()
         self._build()
+        self.ipc.listen(lambda command: self.root.after(0, lambda: self._handle_command(command)))
         self._refresh_folders()
         self.root.after(200, self._drain_events)
         self.root.after(2000, self._refresh_history)
@@ -100,8 +103,24 @@ class MainWindow:
 
     def hide(self) -> None:
         self.root.withdraw()
+        self.status.set("Running in the background. Relaunch Windows Wallpaper to restore this window.")
+
+    def _handle_command(self, command: str | None) -> None:
+        if command == "show":
+            self.show()
+        elif command == "next":
+            self.app.next()
+        elif command == "previous":
+            self.app.previous()
+        elif command == "pause":
+            self.app.set_paused(True)
+        elif command == "resume":
+            self.app.set_paused(False)
+        elif command == "quit":
+            self.quit()
 
     def quit(self) -> None:
+        self.ipc.close()
         self.root.destroy()
 
     def show(self) -> None:

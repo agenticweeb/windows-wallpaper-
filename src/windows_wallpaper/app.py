@@ -71,10 +71,14 @@ class WallpaperApp:
 
     def scan(self) -> int:
         count = 0
+        valid_paths: set[str] = set()
         for folder in self.folders:
             for path, width, height, size in scan_folder(folder):
-                self.catalog.upsert_image(str(path.resolve()), "local", width, height, size)
+                resolved = str(path.resolve())
+                valid_paths.add(resolved)
+                self.catalog.upsert_image(resolved, "local", width, height, size)
                 count += 1
+        self.catalog.reconcile_local(valid_paths)
         self.events.put(("status", f"Cataloged {count} image(s)"))
         return count
 

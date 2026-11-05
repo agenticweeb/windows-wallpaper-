@@ -9,6 +9,7 @@ from pathlib import Path
 
 from . import __version__
 from .app import WallpaperApp
+from .ipc import IPC
 from .paths import get_paths
 
 
@@ -38,6 +39,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--pause", action="store_true")
     parser.add_argument("--resume", action="store_true")
     args = parser.parse_args(argv)
+    command = next((name for name, enabled in (("next", args.next_wallpaper), ("previous", args.previous), ("pause", args.pause), ("resume", args.resume)) if enabled), None)
+    ipc = IPC()
+    if command and ipc.send(command):
+        return 0
+    if not command and not args.self_test and not args.add_folder and ipc.send("show"):
+        return 0
     instance = _acquire_single_instance()
     if instance is False:
         print("Windows Wallpaper is already running.", file=sys.stderr)
