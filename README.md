@@ -51,6 +51,8 @@ The first launch opens the settings window. Add one or more folders, choose an i
 
 Windows binaries are built on a Windows GitHub Actions runner; PyInstaller is not a cross-compiler. The release workflow produces a portable ZIP and a per-user Inno Setup installer from the same `onedir` build. Create a tag matching the version in `pyproject.toml`, such as `v0.1.0`, to start a release build.
 
+Upgrades stop the running app through `--quit` before replacing files. If an older or unresponsive process does not respond, the installer targets only `WindowsWallpaper.exe` as a fallback.
+
 Unsigned artifacts are suitable for testing. Production signing requires an Authenticode certificate and is intentionally not configured in this public repository.
 
 ## Privacy and safety

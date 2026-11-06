@@ -22,6 +22,10 @@ Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
 DisableProgramGroupPage=yes
+; The application owns its close behavior (close hides the window), so the
+; installer performs a graceful --quit and targeted fallback in PrepareToInstall.
+CloseApplications=no
+RestartApplications=no
 
 [Files]
 Source: "..\..\dist\WindowsWallpaper\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
@@ -35,3 +39,24 @@ Filename: "{app}\{#AppExeName}"; Description: "Launch {#AppName}"; Flags: nowait
 
 [UninstallDelete]
 Type: filesandordirs; Name: "{app}"
+
+[Code]
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+var
+  ResultCode: Integer;
+  ExistingExe: String;
+begin
+  Result := '';
+  NeedsRestart := False;
+  ExistingExe := ExpandConstant('{app}\{#AppExeName}');
+  if not FileExists(ExistingExe) then
+    exit;
+
+  { Ask the running app to close through its authenticated local command path. }
+  Exec(ExistingExe, '--quit', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  Sleep(500);
+
+  { Older builds or a crashed UI may not answer. Only target our exact process. }
+  Exec(ExpandConstant('{sys}\taskkill.exe'), '/F /T /IM {#AppExeName}', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  Sleep(500);
+end;

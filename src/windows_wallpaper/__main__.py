@@ -38,10 +38,13 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--previous", action="store_true")
     parser.add_argument("--pause", action="store_true")
     parser.add_argument("--resume", action="store_true")
+    parser.add_argument("--quit", action="store_true")
     args = parser.parse_args(argv)
-    command = next((name for name, enabled in (("next", args.next_wallpaper), ("previous", args.previous), ("pause", args.pause), ("resume", args.resume)) if enabled), None)
+    command = next((name for name, enabled in (("next", args.next_wallpaper), ("previous", args.previous), ("pause", args.pause), ("resume", args.resume), ("quit", args.quit)) if enabled), None)
     ipc = IPC()
     if command and ipc.send(command):
+        return 0
+    if args.quit:
         return 0
     if not command and not args.self_test and not args.add_folder and ipc.send("show"):
         return 0
