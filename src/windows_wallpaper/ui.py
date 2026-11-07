@@ -72,8 +72,8 @@ class MainWindow:
         ttk.Button(right, text="Apply settings and scan", command=self._apply_settings).pack(fill="x", pady=(2, 12))
         quote_box = ttk.LabelFrame(right, text="Quotes & text overlay", padding=8); quote_box.pack(fill="x", pady=(0, 10))
         ttk.Checkbutton(quote_box, text="Render quote onto the wallpaper copy", variable=self.quote_enabled).grid(row=0, column=0, columnspan=4, sticky="w")
-        self.quote_text_box = tk.Text(quote_box, height=3, width=36, wrap="word"); self.quote_text_box.grid(row=1, column=0, columnspan=4, sticky="ew", pady=(6, 4)); self.quote_text_box.insert("1.0", app.quote_text)
-        ttk.Label(quote_box, text="Author").grid(row=2, column=0, sticky="w"); self.quote_author = ttk.Entry(quote_box, width=18); self.quote_author.grid(row=2, column=1, columnspan=3, sticky="ew"); self.quote_author.insert(0, app.quote_author)
+        self.quote_text_box = tk.Text(quote_box, height=3, width=36, wrap="word"); self.quote_text_box.grid(row=1, column=0, columnspan=4, sticky="ew", pady=(6, 4)); self.quote_text_box.insert("1.0", self.app.quote_text)
+        ttk.Label(quote_box, text="Author").grid(row=2, column=0, sticky="w"); self.quote_author = ttk.Entry(quote_box, width=18); self.quote_author.grid(row=2, column=1, columnspan=3, sticky="ew"); self.quote_author.insert(0, self.app.quote_author)
         ttk.Label(quote_box, text="Source").grid(row=3, column=0, sticky="w", pady=(4, 0)); ttk.Combobox(quote_box, textvariable=self.quote_source, values=("quotable", "zenquotes", "custom"), state="readonly", width=12).grid(row=3, column=1, sticky="w", pady=(4, 0)); ttk.Button(quote_box, text="Fetch quote", command=self._fetch_quote).grid(row=3, column=2, columnspan=2, sticky="e", pady=(4, 0))
         ttk.Label(quote_box, text="Tags").grid(row=4, column=0, sticky="w"); ttk.Entry(quote_box, textvariable=self.quote_tags, width=15).grid(row=4, column=1, columnspan=3, sticky="ew")
         for col, (label, var) in enumerate((("Size", self.quote_font_size), ("Color", self.quote_color), ("Opacity", self.quote_bg_opacity), ("Width", self.quote_width))):
