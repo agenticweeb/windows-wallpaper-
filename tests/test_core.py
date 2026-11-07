@@ -3,8 +3,10 @@ from pathlib import Path
 import pytest
 
 from windows_wallpaper.paths import get_paths
+from windows_wallpaper.overlay import render_quote
 from windows_wallpaper.providers import download_image
 from windows_wallpaper.storage import Catalog
+from PIL import Image
 
 
 def test_portable_paths(monkeypatch, tmp_path):
@@ -47,3 +49,13 @@ def test_catalog_reconciles_deleted_local_images(tmp_path):
     assert catalog.reconcile_local(set()) == 1
     assert catalog.list_images(["local"]) == []
     catalog.close()
+
+
+def test_quote_overlay_writes_a_new_wallpaper_copy(tmp_path):
+    source = tmp_path / "original.jpg"
+    rendered = tmp_path / "cache" / "rendered.jpg"
+    Image.new("RGB", (1280, 720), "#345").save(source)
+    render_quote(source, rendered, "Keep going", "Variety", font_size=42, hpos=50, vpos=78)
+    assert rendered.exists()
+    assert Image.open(source).size == Image.open(rendered).size
+    assert source.read_bytes() != rendered.read_bytes()

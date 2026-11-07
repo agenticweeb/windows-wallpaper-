@@ -90,3 +90,31 @@ def bing_images() -> list[dict[str, str]]:
         if base:
             items.append({"url": "https://www.bing.com" + base + "_UHD.jpg", "origin": "https://www.bing.com" + item.get("url", ""), "title": item.get("copyright", "Bing Photo of the Day")})
     return items
+
+
+def wallhaven_images(query: str = "anime", page: int = 1) -> list[dict[str, str]]:
+    response = requests.get(
+        "https://wallhaven.cc/api/v1/search",
+        params={"q": query or "anime", "categories": "111", "purity": "100", "sorting": "random", "page": page},
+        timeout=(10, 20),
+        headers={"User-Agent": "WindowsWallpaper/0.2"},
+    )
+    response.raise_for_status()
+    return [{"url": item["path"], "origin": item.get("url", "https://wallhaven.cc"), "title": query or "Anime"} for item in response.json().get("data", []) if item.get("path")]
+
+
+def reddit_images(subreddit: str = "Animewallpaper", limit: int = 30) -> list[dict[str, str]]:
+    response = requests.get(
+        f"https://www.reddit.com/r/{subreddit.strip() or 'Animewallpaper'}/hot.json",
+        params={"limit": min(100, max(1, limit))},
+        timeout=(10, 20),
+        headers={"User-Agent": "WindowsWallpaper/0.2 (wallpaper manager)"},
+    )
+    response.raise_for_status()
+    items = []
+    for child in response.json().get("data", {}).get("children", []):
+        data = child.get("data", {})
+        url = data.get("url_overridden_by_dest") or data.get("url", "")
+        if url.lower().split("?")[0].endswith((".jpg", ".jpeg", ".png", ".webp")):
+            items.append({"url": url, "origin": f"https://www.reddit.com{data.get('permalink', '')}", "title": data.get("title", subreddit)})
+    return items

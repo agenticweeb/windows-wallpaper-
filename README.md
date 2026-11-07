@@ -1,6 +1,6 @@
 # Windows Wallpaper
 
-A lightweight Windows wallpaper manager inspired by the workflow and spirit of Variety. It rotates wallpapers from local folders, keeps history and favorites, supports pause/resume and manual navigation, and can optionally download Bing daily wallpapers.
+A lightweight Windows wallpaper manager inspired by the workflow and spirit of Variety. It rotates wallpapers from local folders, keeps history and favorites, supports pause/resume and manual navigation, and can download wallpapers from several online sources with optional quote overlays.
 
 ## Status
 
@@ -14,7 +14,10 @@ This repository is the first Windows-native release line. The application is des
 - Persistent history and current wallpaper across restarts.
 - Basic filters: minimum dimensions, landscape preference, and filename pattern.
 - Atomic downloads with image-content validation.
-- Optional Bing Photo of the Day source.
+- Online wallpaper sources: Bing Photo of the Day, Wallhaven search, and Reddit image communities.
+- Anime-ready presets: search Wallhaven for `anime` or enter a different query, and use communities such as `Animewallpaper` on Reddit.
+- Quote overlays rendered onto a cache copy, with Quotable, ZenQuotes, and editable local `quotes.txt` support.
+- Quote editor controls for text, author, font size, text color, background opacity, text width, and horizontal/vertical placement.
 - Windows 10/11 wallpaper setting through the native Unicode Windows API.
 - Per-user configuration and data directories; no administrator permission required for normal use.
 - Portable mode with `--portable` or a `portable.flag` beside the executable.
@@ -49,7 +52,7 @@ The first launch opens the settings window. Add one or more folders, choose an i
 
 ## Building the Windows release
 
-Windows binaries are built on a Windows GitHub Actions runner; PyInstaller is not a cross-compiler. The release workflow produces a portable ZIP and a per-user Inno Setup installer from the same `onedir` build. Create a tag matching the version in `pyproject.toml`, such as `v0.1.0`, to start a release build.
+Windows binaries are built on a Windows GitHub Actions runner; PyInstaller is not a cross-compiler. The release workflow produces a portable ZIP and a per-user Inno Setup installer from the same `onedir` build. Create a tag matching the version in `pyproject.toml`, such as `v0.2.0`, to start a release build.
 
 Upgrades stop the running app through `--quit` before replacing files. If an older or unresponsive process does not respond, the installer targets only `WindowsWallpaper.exe` as a fallback.
 
@@ -57,7 +60,7 @@ Unsigned artifacts are suitable for testing. Production signing requires an Auth
 
 ## Privacy and safety
 
-The app does not collect telemetry. Network access is used only when the optional Bing source is enabled or when the user explicitly asks to download an image URL. Downloads accept HTTP(S) only, follow a bounded number of redirects, validate the decoded image, use atomic writes, and never execute downloaded content. Original wallpaper files are not modified.
+The app does not collect telemetry. Network access is used only when the user explicitly starts an online source or quote fetch. Downloads accept HTTP(S) only, follow a bounded number of redirects, validate the decoded image, use atomic writes, and never execute downloaded content. Original wallpaper files are not modified; quote text is rendered into a separate cache copy before Windows displays it.
 
 ## License
 
