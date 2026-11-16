@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 
 from windows_wallpaper.paths import get_paths
-from windows_wallpaper.overlay import render_quote
+from windows_wallpaper.overlay import STYLES, render_quote
 from windows_wallpaper.providers import download_image
 from windows_wallpaper.storage import Catalog
 from windows_wallpaper.quotes import funny_quote
@@ -60,6 +60,10 @@ def test_quote_overlay_writes_a_new_wallpaper_copy(tmp_path):
     assert rendered.exists()
     assert Image.open(source).size == Image.open(rendered).size
     assert source.read_bytes() != rendered.read_bytes()
+
+
+def test_quote_styles_include_multiple_visual_presets():
+    assert {"classic", "minimal", "paper", "sunset", "ocean", "matrix", "glass", "royal", "ember"}.issubset(STYLES)
 
 
 def test_funny_quote_provider_returns_attributed_quote():

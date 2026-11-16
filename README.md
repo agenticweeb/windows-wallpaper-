@@ -55,7 +55,7 @@ In **Quote Studio**, select one or more providers and set **Rotation time**. Quo
 
 ## Building the Windows release
 
-Windows binaries are built on a Windows GitHub Actions runner; PyInstaller is not a cross-compiler. The release workflow produces a portable ZIP and a per-user Inno Setup installer from the same `onedir` build. Create a tag matching the version in `pyproject.toml`, such as `v0.3.1`, to start a release build.
+Windows binaries are built on a Windows GitHub Actions runner; PyInstaller is not a cross-compiler. The release workflow produces a portable ZIP and a per-user Inno Setup installer from the same `onedir` build. Create a tag matching the version in `pyproject.toml`, such as `v0.3.2`, to start a release build.
 
 Upgrades stop the running app through `--quit` before replacing files. If an older or unresponsive process does not respond, the installer targets only `WindowsWallpaper.exe` as a fallback.
 

@@ -9,6 +9,15 @@ STYLES = {
     "neon": {"color": "#00f0ff", "panel": (5, 10, 22), "shadow": True, "glow": True},
     "terminal": {"color": "#00ff9f", "panel": (0, 15, 10), "shadow": False, "glow": True},
     "hologram": {"color": "#d7c6ff", "panel": (35, 10, 60), "shadow": True, "glow": True},
+    "minimal": {"color": "#ffffff", "panel": (0, 0, 0), "shadow": False, "glow": False},
+    "paper": {"color": "#fff4d6", "panel": (35, 25, 12), "shadow": True, "glow": False},
+    "sunset": {"color": "#ffd0a8", "panel": (70, 12, 28), "shadow": True, "glow": True},
+    "ocean": {"color": "#b9f5ff", "panel": (5, 35, 55), "shadow": True, "glow": True},
+    "matrix": {"color": "#6cff87", "panel": (0, 18, 4), "shadow": False, "glow": True},
+    "glass": {"color": "#ffffff", "panel": (25, 35, 48), "shadow": True, "glow": False},
+    "mono": {"color": "#eeeeee", "panel": (35, 35, 35), "shadow": True, "glow": False},
+    "royal": {"color": "#f1d5ff", "panel": (45, 12, 70), "shadow": True, "glow": True},
+    "ember": {"color": "#ffd2a1", "panel": (55, 18, 0), "shadow": True, "glow": True},
 }
 
 

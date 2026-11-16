@@ -3,7 +3,7 @@ from __future__ import annotations
 import queue
 import tkinter as tk
 from pathlib import Path
-from tkinter import filedialog, messagebox, ttk
+from tkinter import colorchooser, filedialog, messagebox, ttk
 
 from PIL import Image, ImageTk
 
@@ -142,6 +142,17 @@ class MainWindow:
         self.source_log = tk.Listbox(parent, height=10, bg=self.PANEL, fg=self.MUTED, relief="flat", highlightthickness=0); self.source_log.pack(fill="both", expand=True, pady=(22, 0))
 
     def _build_quotes(self, parent) -> None:
+        parent.rowconfigure(0, weight=1); parent.columnconfigure(0, weight=1)
+        canvas = tk.Canvas(parent, bg=self.BG, highlightthickness=0, borderwidth=0)
+        scrollbar = ttk.Scrollbar(parent, orient="vertical", command=canvas.yview)
+        canvas.grid(row=0, column=0, sticky="nsew"); scrollbar.grid(row=0, column=1, sticky="ns")
+        canvas.configure(yscrollcommand=scrollbar.set)
+        content = ttk.Frame(canvas)
+        window = canvas.create_window((0, 0), window=content, anchor="nw")
+        content.bind("<Configure>", lambda _event: canvas.configure(scrollregion=canvas.bbox("all")))
+        canvas.bind("<Configure>", lambda event: canvas.itemconfigure(window, width=event.width))
+        canvas.bind_all("<MouseWheel>", lambda event: canvas.yview_scroll(int(-event.delta / 120), "units"))
+        parent = content
         parent.columnconfigure(0, weight=2); parent.columnconfigure(1, weight=1); parent.rowconfigure(1, weight=1)
         ttk.Label(parent, text="QUOTE STUDIO", style="Section.TLabel").grid(row=0, column=0, sticky="w"); ttk.Label(parent, text="Arrow through the controls and the preview moves immediately.", style="Muted.TLabel").grid(row=0, column=1, sticky="e")
         editor = ttk.Frame(parent); editor.grid(row=1, column=0, sticky="nsew", padx=(0, 20)); editor.columnconfigure(1, weight=1)
@@ -159,15 +170,34 @@ class MainWindow:
         ttk.Label(editor, text="Tags (Quotable)").grid(row=5, column=0, sticky="w", pady=4); ttk.Entry(editor, textvariable=self.quote_tags).grid(row=5, column=1, sticky="ew", pady=4)
         buttons = ttk.Frame(editor); buttons.grid(row=6, column=1, sticky="ew", pady=10); ttk.Button(buttons, text="Fetch selected now", command=self._fetch_quote).pack(side="left"); ttk.Button(buttons, text="Apply to desktop now", style="Accent.TButton", command=self._apply_quote_now).pack(side="left", padx=8)
         options = ttk.LabelFrame(editor, text="Typography & placement · use arrows for live movement", padding=12); options.grid(row=7, column=0, columnspan=2, sticky="ew", pady=10)
-        fields = [("Style", self.quote_style, ("classic", "neon", "terminal", "hologram")), ("Font size", self.quote_font_size, 14, 160, 2), ("Color", self.quote_color, None), ("Panel opacity", self.quote_bg_opacity, 0, 100, 5), ("Text width %", self.quote_width, 10, 95, 1), ("Horizontal %", self.quote_hpos, 0, 100, 1), ("Vertical %", self.quote_vpos, 0, 100, 1)]
+        fields = [("Style", self.quote_style, tuple(STYLES)), ("Font size", self.quote_font_size, 14, 160, 2), ("Color", self.quote_color, "color"), ("Panel opacity", self.quote_bg_opacity, 0, 100, 5), ("Text width %", self.quote_width, 10, 95, 1), ("Horizontal %", self.quote_hpos, 0, 100, 1), ("Vertical %", self.quote_vpos, 0, 100, 1)]
         for i, field in enumerate(fields):
             r, c = divmod(i, 2); label, var = field[0], field[1]; ttk.Label(options, text=label).grid(row=r, column=c * 2, sticky="w", padx=(0, 8), pady=4)
-            if len(field) == 3 and field[2] is not None: widget = ttk.Combobox(options, textvariable=var, values=field[2], state="readonly")
+            if len(field) == 3 and field[2] == "color": widget = self._make_color_picker(options)
+            elif len(field) == 3 and field[2] is not None: widget = ttk.Combobox(options, textvariable=var, values=field[2], state="readonly")
             elif len(field) >= 5: widget = self._make_spinbox(options, var, field[2], field[3], field[4])
             else: widget = ttk.Entry(options, textvariable=var)
             widget.grid(row=r, column=c * 2 + 1, sticky="ew", padx=(0, 14), pady=4); options.columnconfigure(c * 2 + 1, weight=1)
             var.trace_add("write", lambda *_args: self._live_quote_preview())
         preview = tk.Frame(parent, bg="#050508", highlightbackground=self.MAGENTA, highlightthickness=1); preview.grid(row=1, column=1, sticky="nsew", pady=(8, 0)); self.quote_preview = tk.Label(preview, text="QUOTE PREVIEW\n\nChoose a wallpaper to preview the overlay.", bg="#050508", fg=self.MUTED, justify="center", wraplength=280); self.quote_preview.pack(fill="both", expand=True, padx=18, pady=18)
+
+    def _make_color_picker(self, parent):
+        frame = ttk.Frame(parent)
+        self.color_swatch = tk.Button(frame, text="  ", width=4, bg=self.quote_color.get(), activebackground=self.quote_color.get(), relief="flat", command=self._choose_color)
+        self.color_swatch.pack(side="left", padx=(0, 6))
+        ttk.Button(frame, text="Choose color…", command=self._choose_color).pack(side="left")
+        palette = ("#ffffff", "#eeeeee", "#00f0ff", "#00ff9f", "#ffd166", "#ff9f1c", "#ff6b6b", "#ff00aa", "#d7c6ff", "#6cff87", "#111827", "#000000")
+        for color in palette:
+            tk.Button(frame, width=2, height=1, bg=color, activebackground=color, relief="flat", command=lambda value=color: self._set_color(value)).pack(side="left", padx=1)
+        return frame
+
+    def _set_color(self, value: str) -> None:
+        self.quote_color.set(value)
+        self.color_swatch.configure(bg=value, activebackground=value)
+
+    def _choose_color(self) -> None:
+        chosen = colorchooser.askcolor(color=self.quote_color.get(), title="Choose quote color")
+        if chosen and chosen[1]: self._set_color(chosen[1])
 
     def _make_spinbox(self, parent, variable, minimum, maximum, increment):
         widget = tk.Spinbox(parent, textvariable=variable, from_=minimum, to=maximum, increment=increment, width=8, command=self._live_quote_preview, bg=self.PANEL_2, fg=self.TEXT, insertbackground=self.CYAN, buttonbackground=self.PANEL_2, relief="flat", highlightthickness=1, highlightbackground=self.PANEL_2)
