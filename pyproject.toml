@@ -4,26 +4,17 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "windows-wallpaper"
-version = "0.2.1"
-description = "A lightweight Windows wallpaper manager inspired by Variety"
+version = "0.3.0"
+description = "Lightweight Windows wallpaper manager with sources and quote overlays"
 readme = "README.md"
-requires-python = ">=3.11"
-license = { text = "GPL-3.0-only" }
-authors = [{ name = "Windows Wallpaper contributors" }]
-dependencies = [
-  "Pillow>=10.0,<12",
-  "requests>=2.31,<3",
-]
+requires-python = ">=3.10"
+dependencies = ["Pillow>=10.0", "requests>=2.31"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
 
 [project.scripts]
 windows-wallpaper = "windows_wallpaper.__main__:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
-
-[tool.pytest.ini_options]
-testpaths = ["tests"]
-addopts = "-q"
-
-[project.optional-dependencies]
-dev = ["pytest>=8.0,<9", "pyinstaller>=6.0,<7"]

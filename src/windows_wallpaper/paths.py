@@ -17,25 +17,18 @@ class AppPaths:
     database: Path
 
     def create(self) -> "AppPaths":
-        for path in (self.config, self.cache, self.logs, self.downloads, self.favorites):
+        for path in (self.root, self.config, self.cache, self.logs, self.downloads, self.favorites):
             path.mkdir(parents=True, exist_ok=True)
         return self
 
 
-def get_paths(portable: bool | None = None) -> AppPaths:
-    if portable is None:
-        portable = "--portable" in sys.argv or (Path(sys.executable).parent / "portable.flag").exists()
-    if portable:
-        root = Path(sys.executable).resolve().parent / "data"
+def get_paths(portable: bool = False) -> AppPaths:
+    executable_dir = Path(sys.executable).resolve().parent
+    flag = executable_dir / "portable.flag"
+    if portable or flag.exists():
+        root = executable_dir / "data"
     else:
-        local = Path(os.environ.get("LOCALAPPDATA", Path.home() / ".local"))
-        root = local / "WindowsWallpaper"
-    return AppPaths(
-        root=root,
-        config=root / "config",
-        cache=root / "cache",
-        logs=root / "logs",
-        downloads=Path.home() / "Pictures" / "Windows Wallpaper" / "Downloads",
-        favorites=Path.home() / "Pictures" / "Windows Wallpaper" / "Favorites",
-        database=root / "wallpapers.sqlite3",
-    )
+        base = Path(os.environ.get("LOCALAPPDATA", Path.home() / ".local"))
+        root = base / "WindowsWallpaper"
+    config = root / "config"
+    return AppPaths(root, config, root / "cache", root / "logs", root / "downloads", root / "favorites", root / "wallpapers.sqlite3")

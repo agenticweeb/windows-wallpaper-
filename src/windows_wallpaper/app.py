@@ -7,12 +7,13 @@ import random
 import shutil
 import threading
 import time
+import json
 from pathlib import Path
 
 from . import __version__
 from .paths import AppPaths, get_paths
 from .providers import bing_images, download_image, reddit_images, scan_folder, wallhaven_images
-from .quotes import fetch_quote, random_custom_quote
+from .quotes import fallback_quote, fetch_quote, random_custom_quote
 from .overlay import render_quote
 from .storage import Catalog
 from .wallpaper import set_wallpaper
@@ -41,6 +42,7 @@ class WallpaperApp:
         self.quote_vpos = int(self.catalog.get_setting("quote_vpos", 78))
         self.quote_source = str(self.catalog.get_setting("quote_source", "quotable"))
         self.quote_tags = str(self.catalog.get_setting("quote_tags", ""))
+        self.quote_style = str(self.catalog.get_setting("quote_style", "classic"))
         saved_current = self.catalog.get_setting("current", "")
         self.current: Path | None = Path(saved_current) if saved_current and Path(saved_current).is_file() else None
         self.events: queue.Queue[tuple[str, object]] = queue.Queue()
@@ -48,6 +50,8 @@ class WallpaperApp:
         self.wake_event = threading.Event()
         self.thread = threading.Thread(target=self._rotation_loop, name="rotation", daemon=True)
         self.workers: list[threading.Thread] = []
+        self.apply_lock = threading.Lock()
+        self.download_cancel = threading.Event()
 
     def start(self) -> None:
         self.scan()
@@ -58,16 +62,17 @@ class WallpaperApp:
 
     def close(self) -> None:
         self.stop_event.set()
+        self.download_cancel.set()
         self.wake_event.set()
         if self.thread.is_alive():
             self.thread.join(timeout=10)
         for worker in self.workers:
-            worker.join(timeout=10)
+            worker.join(timeout=30)
         self.catalog.close()
 
     def save_settings(self) -> None:
         self.catalog.set_setting("folders", [str(p) for p in self.folders])
-        settings = (("interval", self.interval), ("min_width", self.min_width), ("landscape", self.landscape), ("pattern", self.pattern), ("paused", self.paused), ("quote_enabled", self.quote_enabled), ("quote_text", self.quote_text), ("quote_author", self.quote_author), ("quote_font_size", self.quote_font_size), ("quote_color", self.quote_color), ("quote_bg_opacity", self.quote_bg_opacity), ("quote_width", self.quote_width), ("quote_hpos", self.quote_hpos), ("quote_vpos", self.quote_vpos), ("quote_source", self.quote_source), ("quote_tags", self.quote_tags))
+        settings = (("interval", self.interval), ("min_width", self.min_width), ("landscape", self.landscape), ("pattern", self.pattern), ("paused", self.paused), ("quote_enabled", self.quote_enabled), ("quote_text", self.quote_text), ("quote_author", self.quote_author), ("quote_font_size", self.quote_font_size), ("quote_color", self.quote_color), ("quote_bg_opacity", self.quote_bg_opacity), ("quote_width", self.quote_width), ("quote_hpos", self.quote_hpos), ("quote_vpos", self.quote_vpos), ("quote_source", self.quote_source), ("quote_tags", self.quote_tags), ("quote_style", self.quote_style))
         for key, value in settings:
             self.catalog.set_setting(key, value)
 
@@ -110,11 +115,19 @@ class WallpaperApp:
             try:
                 self.events.put(("status", f"Downloading {label} wallpapers…"))
                 source_name = label.split(" ", 1)[0].lower()
+                completed = 0
+                skipped = 0
                 for item in provider():
+                    if self.download_cancel.is_set():
+                        break
                     safe_name = source_name + "-" + hashlib.sha256(item["url"].encode()).hexdigest()[:20] + ".jpg"
-                    path, width, height, origin = download_image(item["url"], self.paths.downloads / safe_name, origin_url=item["origin"])
-                    self.catalog.upsert_image(str(path), source_name, width, height, path.stat().st_size, item["title"], origin)
-                self.events.put(("status", f"{label} wallpapers are ready"))
+                    try:
+                        path, width, height, origin = download_image(item["url"], self.paths.downloads / safe_name, origin_url=item["origin"])
+                        self.catalog.upsert_image(str(path), source_name, width, height, path.stat().st_size, item.get("title", ""), origin)
+                        completed += 1
+                    except (OSError, ValueError):
+                        skipped += 1
+                self.events.put(("source_complete", {"label": label, "completed": completed, "skipped": skipped}))
             except Exception as exc:
                 log.exception("%s download failed", label)
                 self.events.put(("error", f"{label} download failed: {exc}"))
@@ -125,8 +138,13 @@ class WallpaperApp:
     def fetch_quote(self) -> None:
         def work() -> None:
             try:
-                quote = random_custom_quote(self.paths.config / "quotes.txt") if self.quote_source == "custom" else fetch_quote(self.quote_source, self.quote_tags)
+                try:
+                    quote = random_custom_quote(self.paths.config / "quotes.txt") if self.quote_source == "custom" else fetch_quote(self.quote_source, self.quote_tags)
+                except Exception:
+                    cached = self.catalog.get_setting("last_quote", None)
+                    quote = cached if isinstance(cached, dict) and isinstance(cached.get("quote"), str) and isinstance(cached.get("author", ""), str) else fallback_quote()
                 self.quote_text, self.quote_author = quote["quote"], quote["author"]
+                self.catalog.set_setting("last_quote", quote)
                 self.save_settings()
                 self.events.put(("quote", f"{self.quote_text} — {self.quote_author}"))
             except Exception as exc:
@@ -152,8 +170,14 @@ class WallpaperApp:
     def previous(self) -> None:
         history = self.catalog.history(20)
         paths = [Path(row[0]) for row in history if Path(row[0]).exists()]
-        if len(paths) > 1:
-            self._apply(paths[1])
+        distinct = []
+        for path in paths:
+            if not distinct or path != distinct[-1]:
+                distinct.append(path)
+        if self.current and distinct and distinct[0] == self.current:
+            distinct = distinct[1:]
+        if distinct:
+            self._apply(distinct[0])
         else:
             self.events.put(("status", "No previous wallpaper is available"))
 
@@ -193,9 +217,12 @@ class WallpaperApp:
         try:
             wallpaper_path = path
             if self.quote_enabled and self.quote_text.strip():
-                rendered = self.paths.cache / "rendered" / (hashlib.sha256(f"{path}|{self.quote_text}|{self.quote_author}|{self.quote_hpos}|{self.quote_vpos}".encode()).hexdigest() + ".jpg")
-                wallpaper_path = render_quote(path, rendered, self.quote_text, self.quote_author, font_size=self.quote_font_size, text_color=self.quote_color, background_opacity=self.quote_bg_opacity, width_percent=self.quote_width, hpos=self.quote_hpos, vpos=self.quote_vpos)
-            set_wallpaper(wallpaper_path)
+                stat = path.stat()
+                render_config = {"path": str(path), "mtime": stat.st_mtime_ns, "size": stat.st_size, "quote": self.quote_text, "author": self.quote_author, "style": self.quote_style, "font_size": self.quote_font_size, "color": self.quote_color, "opacity": self.quote_bg_opacity, "width": self.quote_width, "hpos": self.quote_hpos, "vpos": self.quote_vpos}
+                rendered = self.paths.cache / "rendered" / (hashlib.sha256(json.dumps(render_config, sort_keys=True).encode()).hexdigest() + ".jpg")
+                wallpaper_path = render_quote(path, rendered, self.quote_text, self.quote_author, font_size=self.quote_font_size, text_color=self.quote_color, background_opacity=self.quote_bg_opacity, width_percent=self.quote_width, hpos=self.quote_hpos, vpos=self.quote_vpos, style=self.quote_style)
+            with self.apply_lock:
+                set_wallpaper(wallpaper_path)
             self.current = path
             self.catalog.set_setting("current", str(path))
             self.catalog.record_used(str(path))

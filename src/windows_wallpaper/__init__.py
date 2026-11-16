@@ -1,2 +1,1 @@
-__version__ = "0.2.1"
-__app_name__ = "Windows Wallpaper"
+__version__ = "0.3.0"

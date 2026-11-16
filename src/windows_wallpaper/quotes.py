@@ -6,6 +6,13 @@ from pathlib import Path
 
 import requests
 
+BUILTIN_QUOTES = [
+    ("The future depends on what you do today.", "Mahatma Gandhi"),
+    ("The secret of getting ahead is getting started.", "Mark Twain"),
+    ("What we think, we become.", "Buddha"),
+    ("Make it work, make it right, make it fast.", "Kent Beck"),
+]
+
 
 def _quote(quote: str, author: str, source: str) -> dict[str, str]:
     return {"quote": quote.strip(), "author": author.strip() or "Unknown", "source": source}
@@ -14,16 +21,21 @@ def _quote(quote: str, author: str, source: str) -> dict[str, str]:
 def fetch_quote(source: str = "quotable", tags: str = "") -> dict[str, str]:
     source = source.lower().strip()
     if source == "zenquotes":
-        response = requests.get("https://zenquotes.io/api/random", timeout=(8, 15), headers={"User-Agent": "WindowsWallpaper/0.2"})
+        response = requests.get("https://zenquotes.io/api/random", timeout=(8, 15), headers={"User-Agent": "WindowsWallpaper/0.3"})
         response.raise_for_status()
-        item = response.json()[0]
+        payload = response.json()
+        if not isinstance(payload, list) or not payload or not isinstance(payload[0], dict):
+            raise ValueError("ZenQuotes returned an invalid response")
+        item = payload[0]
         return _quote(item.get("q", ""), item.get("a", ""), "ZenQuotes")
     params = {"maxLength": "240"}
     if tags.strip():
         params["tags"] = tags.strip().split(",")[0].strip()
-    response = requests.get("https://api.quotable.io/random", params=params, timeout=(8, 15), headers={"User-Agent": "WindowsWallpaper/0.2"})
+    response = requests.get("https://api.quotable.io/random", params=params, timeout=(8, 15), headers={"User-Agent": "WindowsWallpaper/0.3"})
     response.raise_for_status()
     item = response.json()
+    if not isinstance(item, dict) or not item.get("content"):
+        raise ValueError("Quotable returned an invalid response")
     return _quote(item.get("content", ""), item.get("author", ""), "Quotable")
 
 
@@ -48,3 +60,8 @@ def random_custom_quote(path: Path) -> dict[str, str]:
     if not quotes:
         raise ValueError("The custom quote file has no usable quotes")
     return random.choice(quotes)
+
+
+def fallback_quote() -> dict[str, str]:
+    quote, author = random.choice(BUILTIN_QUOTES)
+    return _quote(quote, author, "Built-in")

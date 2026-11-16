@@ -11,8 +11,9 @@ class IPC:
 
     def send(self, command: str) -> bool:
         try:
-            with socket.create_connection((self.HOST, self.PORT), timeout=0.4) as sock:
+            with socket.create_connection((self.HOST, self.PORT), timeout=0.6) as sock:
                 sock.sendall(json.dumps({"command": command}).encode("utf-8"))
+                sock.shutdown(socket.SHUT_WR)
             return True
         except OSError:
             return False
@@ -32,9 +33,22 @@ class IPC:
                 try:
                     conn, _ = self.server.accept()
                     with conn:
-                        payload = json.loads(conn.recv(4096).decode("utf-8"))
-                    handler(payload.get("command"))
-                except (OSError, ValueError, TypeError):
+                        conn.settimeout(2.0)
+                        chunks = []
+                        while True:
+                            chunk = conn.recv(4096)
+                            if not chunk:
+                                break
+                            chunks.append(chunk)
+                            if sum(map(len, chunks)) > 8192:
+                                raise ValueError("IPC payload too large")
+                    payload = json.loads(b"".join(chunks).decode("utf-8"))
+                    command = payload.get("command") if isinstance(payload, dict) else None
+                    if command in {"show", "next", "previous", "pause", "resume", "quit"}:
+                        handler(command)
+                except (OSError, ValueError, TypeError, json.JSONDecodeError):
+                    if self.server:
+                        continue
                     break
 
         threading.Thread(target=run, name="ipc", daemon=True).start()

@@ -19,7 +19,7 @@ def _acquire_single_instance():
     import ctypes
 
     kernel32 = ctypes.windll.kernel32
-    mutex = kernel32.CreateMutexW(None, False, "Local\\WindowsWallpaper-0.1")
+    mutex = kernel32.CreateMutexW(None, False, "Local\\WindowsWallpaper-0.3")
     if not mutex:
         return None
     if kernel32.GetLastError() == 183:

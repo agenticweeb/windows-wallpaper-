@@ -1,16 +1,34 @@
 from __future__ import annotations
 
 import hashlib
+import ipaddress
 import re
+import socket
 import tempfile
 from pathlib import Path
 from typing import Callable
-from urllib.parse import urlparse
+from urllib.parse import urljoin, urlparse
 
 import requests
 from PIL import Image, UnidentifiedImageError
 
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp", ".webp", ".tif", ".tiff"}
+
+
+def _safe_remote_url(url: str) -> None:
+    parsed = urlparse(url)
+    if parsed.scheme not in {"http", "https"} or parsed.username or parsed.password or not parsed.hostname:
+        raise ValueError("Only public unauthenticated HTTP(S) URLs are allowed")
+    if parsed.hostname.lower() in {"localhost", "localhost.localdomain"}:
+        raise ValueError("Local hosts are not valid image sources")
+    try:
+        addresses = socket.getaddrinfo(parsed.hostname, parsed.port or (443 if parsed.scheme == "https" else 80), type=socket.SOCK_STREAM)
+        for item in addresses:
+            ip = ipaddress.ip_address(item[4][0])
+            if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved or ip.is_multicast or ip.is_unspecified:
+                raise ValueError("Private or reserved image hosts are not allowed")
+    except socket.gaierror as exc:
+        raise ValueError("Could not resolve image host") from exc
 
 
 def scan_folder(folder: Path, limit: int = 10000):
@@ -29,25 +47,35 @@ def scan_folder(folder: Path, limit: int = 10000):
                     with Image.open(path) as image:
                         yield path, image.width, image.height, path.stat().st_size
                         count += 1
-            except (OSError, UnidentifiedImageError):
+            except Exception:
                 continue
     except OSError:
         return
 
 
 def download_image(url: str, target: Path, timeout: tuple[int, int] = (10, 30), max_bytes: int = 30 * 1024 * 1024, origin_url: str = "") -> tuple[Path, int, int, str]:
-    parsed = urlparse(url)
-    if parsed.scheme not in {"http", "https"} or parsed.username or parsed.password:
-        raise ValueError("Only unauthenticated HTTP(S) image URLs are allowed")
+    _safe_remote_url(url)
     target.parent.mkdir(parents=True, exist_ok=True)
     session = requests.Session()
     session.max_redirects = 5
-    response = session.get(url, stream=True, timeout=timeout, allow_redirects=True, headers={"User-Agent": "WindowsWallpaper/0.1"})
+    current_url = url
+    response = None
     try:
+        for _ in range(6):
+            _safe_remote_url(current_url)
+            response = session.get(current_url, stream=True, timeout=timeout, allow_redirects=False, headers={"User-Agent": "WindowsWallpaper/0.3"})
+            if response.is_redirect or response.is_permanent_redirect:
+                location = response.headers.get("Location")
+                response.close()
+                if not location:
+                    raise ValueError("Redirect is missing its target")
+                current_url = urljoin(current_url, location)
+                continue
+            break
+        else:
+            raise ValueError("Too many redirects")
         response.raise_for_status()
-        final = urlparse(response.url)
-        if final.scheme not in {"http", "https"} or final.username or final.password:
-            raise ValueError("Unsafe redirect target")
+        _safe_remote_url(current_url)
         length = int(response.headers.get("Content-Length", "0") or 0)
         if length > max_bytes:
             raise ValueError("Remote image is too large")
@@ -68,11 +96,14 @@ def download_image(url: str, target: Path, timeout: tuple[int, int] = (10, 30), 
             image.verify()
         with Image.open(partial) as image:
             width, height = image.width, image.height
+            image_format = (image.format or "JPEG").upper()
             if width < 200 or height < 200:
                 raise ValueError("Image is too small")
     except Exception:
         partial.unlink(missing_ok=True)
         raise
+    extension = {"JPEG": ".jpg", "JPG": ".jpg", "PNG": ".png", "BMP": ".bmp", "WEBP": ".webp", "TIFF": ".tiff"}.get(image_format, ".jpg")
+    target = target.with_suffix(extension)
     if target.exists():
         target = target.with_name(f"{target.stem}-{hashlib.sha256(url.encode()).hexdigest()[:8]}{target.suffix}")
     partial.replace(target)
@@ -80,7 +111,7 @@ def download_image(url: str, target: Path, timeout: tuple[int, int] = (10, 30), 
 
 
 def bing_images() -> list[dict[str, str]]:
-    response = requests.get("https://www.bing.com/HPImageArchive.aspx?format=js&idx=0&n=8&mkt=en-US", timeout=(10, 20), headers={"User-Agent": "WindowsWallpaper/0.1"})
+    response = requests.get("https://www.bing.com/HPImageArchive.aspx?format=js&idx=0&n=8&mkt=en-US", timeout=(10, 20), headers={"User-Agent": "WindowsWallpaper/0.3"})
     response.raise_for_status()
     items = []
     for item in response.json().get("images", []):
@@ -97,7 +128,7 @@ def wallhaven_images(query: str = "anime", page: int = 1) -> list[dict[str, str]
         "https://wallhaven.cc/api/v1/search",
         params={"q": query or "anime", "categories": "111", "purity": "100", "sorting": "random", "page": page},
         timeout=(10, 20),
-        headers={"User-Agent": "WindowsWallpaper/0.2"},
+        headers={"User-Agent": "WindowsWallpaper/0.3"},
     )
     response.raise_for_status()
     return [{"url": item["path"], "origin": item.get("url", "https://wallhaven.cc"), "title": query or "Anime"} for item in response.json().get("data", []) if item.get("path")]
@@ -108,7 +139,7 @@ def reddit_images(subreddit: str = "Animewallpaper", limit: int = 30) -> list[di
         f"https://www.reddit.com/r/{subreddit.strip() or 'Animewallpaper'}/hot.json",
         params={"limit": min(100, max(1, limit))},
         timeout=(10, 20),
-        headers={"User-Agent": "WindowsWallpaper/0.2 (wallpaper manager)"},
+        headers={"User-Agent": "WindowsWallpaper/0.3 (wallpaper manager)"},
     )
     response.raise_for_status()
     items = []

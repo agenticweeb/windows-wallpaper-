@@ -95,6 +95,10 @@ class Catalog:
         with self._lock:
             return list(self.conn.execute("SELECT h.path,h.used_at,i.title,i.origin_url FROM history h LEFT JOIN images i ON i.path=h.path ORDER BY h.used_at DESC LIMIT ?", (limit,)))
 
+    def image(self, path: str) -> sqlite3.Row | None:
+        with self._lock:
+            return self.conn.execute("SELECT * FROM images WHERE path=?", (path,)).fetchone()
+
     def set_favorite(self, path: str, value: bool) -> None:
         with self._lock, self.conn:
             self.conn.execute("UPDATE images SET favorite=? WHERE path=?", (int(value), path))
