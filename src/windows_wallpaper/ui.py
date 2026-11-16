@@ -51,6 +51,8 @@ class MainWindow:
         self.quote_style = tk.StringVar(value=getattr(app, "quote_style", "classic"))
         self.wallhaven_query = tk.StringVar(value="anime")
         self.reddit_subreddit = tk.StringVar(value="Animewallpaper")
+        self.quote_rotation_interval = tk.StringVar(value=str(getattr(app, "quote_rotation_interval", 120)))
+        self.quote_provider_values = {"Quotable": "quotable", "ZenQuotes": "zenquotes", "Goodreads · imported file": "goodreads", "Funny quotes": "funny", "Built-in fallback": "builtin"}
         self.favorites_only = tk.BooleanVar(value=False)
         self._configure_style()
         self._build()
@@ -141,19 +143,39 @@ class MainWindow:
 
     def _build_quotes(self, parent) -> None:
         parent.columnconfigure(0, weight=2); parent.columnconfigure(1, weight=1); parent.rowconfigure(1, weight=1)
-        ttk.Label(parent, text="QUOTE STUDIO", style="Section.TLabel").grid(row=0, column=0, sticky="w"); ttk.Label(parent, text="Edit the overlay, fetch a new quote, then press Apply & preview.", style="Muted.TLabel").grid(row=0, column=1, sticky="e")
+        ttk.Label(parent, text="QUOTE STUDIO", style="Section.TLabel").grid(row=0, column=0, sticky="w"); ttk.Label(parent, text="Arrow through the controls and the preview moves immediately.", style="Muted.TLabel").grid(row=0, column=1, sticky="e")
         editor = ttk.Frame(parent); editor.grid(row=1, column=0, sticky="nsew", padx=(0, 20)); editor.columnconfigure(1, weight=1)
         ttk.Checkbutton(editor, text="Enable quote overlay", variable=self.quote_enabled).grid(row=0, column=0, columnspan=2, sticky="w", pady=(8, 12))
         ttk.Label(editor, text="Quote text").grid(row=1, column=0, sticky="nw"); self.quote_text_box = tk.Text(editor, height=6, bg=self.PANEL, fg=self.TEXT, insertbackground=self.CYAN, relief="flat", wrap="word"); self.quote_text_box.grid(row=1, column=1, sticky="ew", pady=4); self.quote_text_box.insert("1.0", self.app.quote_text)
         ttk.Label(editor, text="Author").grid(row=2, column=0, sticky="w", pady=4); self.quote_author = ttk.Entry(editor); self.quote_author.grid(row=2, column=1, sticky="ew", pady=4); self.quote_author.insert(0, self.app.quote_author)
-        ttk.Label(editor, text="Provider").grid(row=3, column=0, sticky="w", pady=4); ttk.Combobox(editor, textvariable=self.quote_source, values=("quotable", "zenquotes", "custom"), state="readonly").grid(row=3, column=1, sticky="ew", pady=4)
-        ttk.Label(editor, text="Tags").grid(row=4, column=0, sticky="w", pady=4); ttk.Entry(editor, textvariable=self.quote_tags).grid(row=4, column=1, sticky="ew", pady=4)
-        buttons = ttk.Frame(editor); buttons.grid(row=5, column=1, sticky="ew", pady=10); ttk.Button(buttons, text="Fetch new quote", command=self._fetch_quote).pack(side="left"); ttk.Button(buttons, text="Apply & preview", style="Accent.TButton", command=self._apply_settings).pack(side="left", padx=8)
-        options = ttk.LabelFrame(editor, text="Typography & placement", padding=12); options.grid(row=6, column=0, columnspan=2, sticky="ew", pady=10)
-        fields = [("Style", self.quote_style, ("classic", "neon", "terminal", "hologram")), ("Font size", self.quote_font_size, None), ("Color", self.quote_color, None), ("Panel opacity", self.quote_bg_opacity, None), ("Text width %", self.quote_width, None), ("Horizontal %", self.quote_hpos, None), ("Vertical %", self.quote_vpos, None)]
-        for i, (label, var, values) in enumerate(fields):
-            r, c = divmod(i, 2); ttk.Label(options, text=label).grid(row=r, column=c * 2, sticky="w", padx=(0, 8), pady=4); widget = ttk.Combobox(options, textvariable=var, values=values, state="readonly") if values else ttk.Entry(options, textvariable=var); widget.grid(row=r, column=c * 2 + 1, sticky="ew", padx=(0, 14), pady=4); options.columnconfigure(c * 2 + 1, weight=1)
+        ttk.Label(editor, text="Choose providers\n(select one or more)").grid(row=3, column=0, sticky="nw", pady=4)
+        self.quote_provider_list = tk.Listbox(editor, selectmode=tk.MULTIPLE, height=5, exportselection=False, bg=self.PANEL, fg=self.TEXT, selectbackground=self.CYAN, selectforeground=self.BG, relief="flat", highlightthickness=0)
+        for label in self.quote_provider_values: self.quote_provider_list.insert(tk.END, label)
+        selected_providers = set(getattr(self.app, "quote_providers", [self.app.quote_source]))
+        for index, label in enumerate(self.quote_provider_values):
+            if self.quote_provider_values[label] in selected_providers: self.quote_provider_list.selection_set(index)
+        self.quote_provider_list.grid(row=3, column=1, sticky="ew", pady=4)
+        ttk.Label(editor, text="Rotation time (seconds)").grid(row=4, column=0, sticky="w", pady=4); self._make_spinbox(editor, self.quote_rotation_interval, 10, 86400, 10).grid(row=4, column=1, sticky="w", pady=4)
+        ttk.Label(editor, text="Tags (Quotable)").grid(row=5, column=0, sticky="w", pady=4); ttk.Entry(editor, textvariable=self.quote_tags).grid(row=5, column=1, sticky="ew", pady=4)
+        buttons = ttk.Frame(editor); buttons.grid(row=6, column=1, sticky="ew", pady=10); ttk.Button(buttons, text="Fetch selected now", command=self._fetch_quote).pack(side="left"); ttk.Button(buttons, text="Apply to desktop now", style="Accent.TButton", command=self._apply_quote_now).pack(side="left", padx=8)
+        options = ttk.LabelFrame(editor, text="Typography & placement · use arrows for live movement", padding=12); options.grid(row=7, column=0, columnspan=2, sticky="ew", pady=10)
+        fields = [("Style", self.quote_style, ("classic", "neon", "terminal", "hologram")), ("Font size", self.quote_font_size, 14, 160, 2), ("Color", self.quote_color, None), ("Panel opacity", self.quote_bg_opacity, 0, 100, 5), ("Text width %", self.quote_width, 10, 95, 1), ("Horizontal %", self.quote_hpos, 0, 100, 1), ("Vertical %", self.quote_vpos, 0, 100, 1)]
+        for i, field in enumerate(fields):
+            r, c = divmod(i, 2); label, var = field[0], field[1]; ttk.Label(options, text=label).grid(row=r, column=c * 2, sticky="w", padx=(0, 8), pady=4)
+            if len(field) == 3 and field[2] is not None: widget = ttk.Combobox(options, textvariable=var, values=field[2], state="readonly")
+            elif len(field) >= 5: widget = self._make_spinbox(options, var, field[2], field[3], field[4])
+            else: widget = ttk.Entry(options, textvariable=var)
+            widget.grid(row=r, column=c * 2 + 1, sticky="ew", padx=(0, 14), pady=4); options.columnconfigure(c * 2 + 1, weight=1)
+            var.trace_add("write", lambda *_args: self._live_quote_preview())
         preview = tk.Frame(parent, bg="#050508", highlightbackground=self.MAGENTA, highlightthickness=1); preview.grid(row=1, column=1, sticky="nsew", pady=(8, 0)); self.quote_preview = tk.Label(preview, text="QUOTE PREVIEW\n\nChoose a wallpaper to preview the overlay.", bg="#050508", fg=self.MUTED, justify="center", wraplength=280); self.quote_preview.pack(fill="both", expand=True, padx=18, pady=18)
+
+    def _make_spinbox(self, parent, variable, minimum, maximum, increment):
+        widget = tk.Spinbox(parent, textvariable=variable, from_=minimum, to=maximum, increment=increment, width=8, command=self._live_quote_preview, bg=self.PANEL_2, fg=self.TEXT, insertbackground=self.CYAN, buttonbackground=self.PANEL_2, relief="flat", highlightthickness=1, highlightbackground=self.PANEL_2)
+        widget.bind("<KeyRelease>", lambda _event: self._live_quote_preview()); widget.bind("<MouseWheel>", lambda _event: self._live_quote_preview())
+        return widget
+
+    def _live_quote_preview(self) -> None:
+        if hasattr(self, "quote_preview"): self._render_quote_preview()
 
     def _build_settings(self, parent) -> None:
         ttk.Label(parent, text="SETTINGS", style="Section.TLabel").pack(anchor="w")
@@ -166,9 +188,10 @@ class MainWindow:
 
     def _apply_settings(self) -> None:
         try:
-            interval = max(30, int(self.interval.get())); min_width = max(0, int(self.min_width.get())); font_size = max(14, int(self.quote_font_size.get())); opacity = max(0, min(100, int(self.quote_bg_opacity.get()))); width = max(10, min(95, int(self.quote_width.get()))); hpos = max(0, min(100, int(self.quote_hpos.get()))); vpos = max(0, min(100, int(self.quote_vpos.get())))
+            interval = max(30, int(self.interval.get())); min_width = max(0, int(self.min_width.get())); font_size = max(14, int(self.quote_font_size.get())); opacity = max(0, min(100, int(self.quote_bg_opacity.get()))); width = max(10, min(95, int(self.quote_width.get()))); hpos = max(0, min(100, int(self.quote_hpos.get()))); vpos = max(0, min(100, int(self.quote_vpos.get()))); quote_rotation_interval = max(10, int(self.quote_rotation_interval.get()))
             if not self._valid_color(self.quote_color.get()): raise ValueError("Color must be #RRGGBB")
-            self.app.interval = interval; self.app.min_width = min_width; self.app.landscape = self.landscape.get(); self.app.pattern = self.pattern.get().strip(); self.app.quote_enabled = self.quote_enabled.get(); self.app.quote_text = self.quote_text_box.get("1.0", "end").strip(); self.app.quote_author = self.quote_author.get().strip(); self.app.quote_source = self.quote_source.get(); self.app.quote_tags = self.quote_tags.get().strip(); self.app.quote_font_size = font_size; self.app.quote_color = self.quote_color.get().strip(); self.app.quote_bg_opacity = opacity; self.app.quote_width = width; self.app.quote_hpos = hpos; self.app.quote_vpos = vpos; self.app.quote_style = self.quote_style.get(); self.app.save_settings(); self.app.wake_event.set(); self.app.scan(); self._refresh_library(); self._render_quote_preview(); self.status.set("Settings saved · preview updated"); return True
+            providers = [self.quote_provider_values[self.quote_provider_list.get(index)] for index in self.quote_provider_list.curselection()] or ["quotable"]
+            self.app.interval = interval; self.app.min_width = min_width; self.app.landscape = self.landscape.get(); self.app.pattern = self.pattern.get().strip(); self.app.quote_enabled = self.quote_enabled.get(); self.app.quote_text = self.quote_text_box.get("1.0", "end").strip(); self.app.quote_author = self.quote_author.get().strip(); self.app.quote_providers = providers; self.app.quote_source = providers[0]; self.app.quote_rotation_interval = quote_rotation_interval; self.app.quote_tags = self.quote_tags.get().strip(); self.app.quote_font_size = font_size; self.app.quote_color = self.quote_color.get().strip(); self.app.quote_bg_opacity = opacity; self.app.quote_width = width; self.app.quote_hpos = hpos; self.app.quote_vpos = vpos; self.app.quote_style = self.quote_style.get(); self.app.save_settings(); self.app.wake_event.set(); self.app.quote_wake_event.set(); self.app.scan(); self._refresh_library(); self._render_quote_preview(); self.status.set("Settings saved · preview updated"); return True
         except ValueError as exc: messagebox.showerror("Invalid settings", f"Check the highlighted values. {exc}"); return False
 
     @staticmethod
@@ -196,6 +219,9 @@ class MainWindow:
 
     def _fetch_quote(self) -> None:
         if self._apply_settings(): self.app.fetch_quote(); self.status.set("Fetching quote…")
+
+    def _apply_quote_now(self) -> None:
+        if self._apply_settings(): self.app.apply_current(); self.status.set("Quote overlay applied to the desktop")
 
     def _refresh_folders(self) -> None:
         self.folders.delete(0, tk.END)

@@ -16,8 +16,9 @@ This repository is the first Windows-native release line. The application is des
 - Atomic downloads with image-content validation.
 - Online wallpaper sources: Bing Photo of the Day, Wallhaven search, and Reddit image communities.
 - Anime-ready presets: search Wallhaven for `anime` or enter a different query, and use communities such as `Animewallpaper` on Reddit.
-- Quote overlays rendered onto a cache copy, with Quotable, ZenQuotes, and editable local `quotes.txt` support.
-- Quote editor controls for text, author, font size, text color, background opacity, text width, and horizontal/vertical placement.
+- Quote overlays rendered onto a cache copy, with Quotable, ZenQuotes, Goodreads-imported quotes, funny quotes, built-in fallback quotes, and editable local files.
+- Quote Studio uses arrow-key spinboxes for live font size, panel opacity, text width, and horizontal/vertical placement preview.
+- Independent quote rotation: select multiple providers, choose the seconds per quote, fetch the next quote, and apply the active quote directly to the desktop.
 - Windows 10/11 wallpaper setting through the native Unicode Windows API.
 - Per-user configuration and data directories; no administrator permission required for normal use.
 - Portable mode with `--portable` or a `portable.flag` beside the executable.
@@ -50,9 +51,11 @@ windows-wallpaper --version
 
 The first launch opens the settings window. Add one or more folders, choose an interval, uncheck **Pause rotation**, and press **Next** once to verify Windows integration. Closing the window hides it while rotation continues; launching Windows Wallpaper again restores the existing window. The CLI controls `--next`, `--previous`, `--pause`, and `--resume` are sent to that same running instance. Use the **Quit** button to exit completely. User data is stored under `%LOCALAPPDATA%\WindowsWallpaper` when installed. Portable mode stores data under `data` beside the executable.
 
+In **Quote Studio**, select one or more providers and set **Rotation time**. Quotable and ZenQuotes use their public endpoints. Goodreads does not provide a supported public quotes API, so the Goodreads option reads an import file at `%LOCALAPPDATA%\WindowsWallpaper\config\quotes_goodreads.txt`; use one quote per line as `quote | author`. The **Funny quotes** and **Built-in fallback** options work offline. Enable the overlay, use the arrow buttons to position and size it while watching the preview, then choose **Apply to desktop now**. Once enabled, the quote worker re-renders the current wallpaper at the selected quote interval even when wallpaper rotation is paused.
+
 ## Building the Windows release
 
-Windows binaries are built on a Windows GitHub Actions runner; PyInstaller is not a cross-compiler. The release workflow produces a portable ZIP and a per-user Inno Setup installer from the same `onedir` build. Create a tag matching the version in `pyproject.toml`, such as `v0.3.0`, to start a release build.
+Windows binaries are built on a Windows GitHub Actions runner; PyInstaller is not a cross-compiler. The release workflow produces a portable ZIP and a per-user Inno Setup installer from the same `onedir` build. Create a tag matching the version in `pyproject.toml`, such as `v0.3.1`, to start a release build.
 
 Upgrades stop the running app through `--quit` before replacing files. If an older or unresponsive process does not respond, the installer targets only `WindowsWallpaper.exe` as a fallback.
 

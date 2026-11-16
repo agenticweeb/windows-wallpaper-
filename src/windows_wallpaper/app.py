@@ -13,7 +13,7 @@ from pathlib import Path
 from . import __version__
 from .paths import AppPaths, get_paths
 from .providers import bing_images, download_image, reddit_images, scan_folder, wallhaven_images
-from .quotes import fallback_quote, fetch_quote, random_custom_quote
+from .quotes import fallback_quote, fetch_quote, funny_quote, random_custom_quote
 from .overlay import render_quote
 from .storage import Catalog
 from .wallpaper import set_wallpaper
@@ -41,6 +41,10 @@ class WallpaperApp:
         self.quote_hpos = int(self.catalog.get_setting("quote_hpos", 50))
         self.quote_vpos = int(self.catalog.get_setting("quote_vpos", 78))
         self.quote_source = str(self.catalog.get_setting("quote_source", "quotable"))
+        self.quote_providers = [str(item) for item in self.catalog.get_setting("quote_providers", ["quotable"]) if str(item)]
+        if not self.quote_providers:
+            self.quote_providers = ["quotable"]
+        self.quote_rotation_interval = max(10, int(self.catalog.get_setting("quote_rotation_interval", 120)))
         self.quote_tags = str(self.catalog.get_setting("quote_tags", ""))
         self.quote_style = str(self.catalog.get_setting("quote_style", "classic"))
         saved_current = self.catalog.get_setting("current", "")
@@ -49,9 +53,12 @@ class WallpaperApp:
         self.stop_event = threading.Event()
         self.wake_event = threading.Event()
         self.thread = threading.Thread(target=self._rotation_loop, name="rotation", daemon=True)
+        self.quote_thread = threading.Thread(target=self._quote_rotation_loop, name="quote-rotation", daemon=True)
         self.workers: list[threading.Thread] = []
         self.apply_lock = threading.Lock()
         self.download_cancel = threading.Event()
+        self.quote_wake_event = threading.Event()
+        self.quote_provider_index = 0
 
     def start(self) -> None:
         self.scan()
@@ -59,20 +66,27 @@ class WallpaperApp:
             if self.thread.ident is not None:
                 self.thread = threading.Thread(target=self._rotation_loop, name="rotation", daemon=True)
             self.thread.start()
+        if not self.quote_thread.is_alive():
+            if self.quote_thread.ident is not None:
+                self.quote_thread = threading.Thread(target=self._quote_rotation_loop, name="quote-rotation", daemon=True)
+            self.quote_thread.start()
 
     def close(self) -> None:
         self.stop_event.set()
         self.download_cancel.set()
         self.wake_event.set()
+        self.quote_wake_event.set()
         if self.thread.is_alive():
             self.thread.join(timeout=10)
+        if self.quote_thread.is_alive():
+            self.quote_thread.join(timeout=10)
         for worker in self.workers:
             worker.join(timeout=30)
         self.catalog.close()
 
     def save_settings(self) -> None:
         self.catalog.set_setting("folders", [str(p) for p in self.folders])
-        settings = (("interval", self.interval), ("min_width", self.min_width), ("landscape", self.landscape), ("pattern", self.pattern), ("paused", self.paused), ("quote_enabled", self.quote_enabled), ("quote_text", self.quote_text), ("quote_author", self.quote_author), ("quote_font_size", self.quote_font_size), ("quote_color", self.quote_color), ("quote_bg_opacity", self.quote_bg_opacity), ("quote_width", self.quote_width), ("quote_hpos", self.quote_hpos), ("quote_vpos", self.quote_vpos), ("quote_source", self.quote_source), ("quote_tags", self.quote_tags), ("quote_style", self.quote_style))
+        settings = (("interval", self.interval), ("min_width", self.min_width), ("landscape", self.landscape), ("pattern", self.pattern), ("paused", self.paused), ("quote_enabled", self.quote_enabled), ("quote_text", self.quote_text), ("quote_author", self.quote_author), ("quote_font_size", self.quote_font_size), ("quote_color", self.quote_color), ("quote_bg_opacity", self.quote_bg_opacity), ("quote_width", self.quote_width), ("quote_hpos", self.quote_hpos), ("quote_vpos", self.quote_vpos), ("quote_source", self.quote_source), ("quote_providers", self.quote_providers), ("quote_rotation_interval", self.quote_rotation_interval), ("quote_tags", self.quote_tags), ("quote_style", self.quote_style))
         for key, value in settings:
             self.catalog.set_setting(key, value)
 
@@ -135,11 +149,23 @@ class WallpaperApp:
         self.workers.append(worker)
         worker.start()
 
-    def fetch_quote(self) -> None:
+    def fetch_quote(self, provider: str | None = None) -> None:
         def work() -> None:
             try:
                 try:
-                    quote = random_custom_quote(self.paths.config / "quotes.txt") if self.quote_source == "custom" else fetch_quote(self.quote_source, self.quote_tags)
+                    providers = self.quote_providers or [self.quote_source]
+                    selected = provider or providers[self.quote_provider_index % len(providers)]
+                    self.quote_provider_index = (self.quote_provider_index + 1) % len(providers)
+                    if selected == "custom":
+                        quote = random_custom_quote(self.paths.config / "quotes.txt")
+                    elif selected == "goodreads":
+                        quote = random_custom_quote(self.paths.config / "quotes_goodreads.txt")
+                    elif selected == "funny":
+                        quote = funny_quote()
+                    elif selected == "builtin":
+                        quote = fallback_quote()
+                    else:
+                        quote = fetch_quote(selected, self.quote_tags)
                 except Exception:
                     cached = self.catalog.get_setting("last_quote", None)
                     quote = cached if isinstance(cached, dict) and isinstance(cached.get("quote"), str) and isinstance(cached.get("author", ""), str) else fallback_quote()
@@ -147,6 +173,8 @@ class WallpaperApp:
                 self.catalog.set_setting("last_quote", quote)
                 self.save_settings()
                 self.events.put(("quote", f"{self.quote_text} — {self.quote_author}"))
+                if self.quote_enabled and self.current and self.current.exists():
+                    self._apply(self.current, record_history=False)
             except Exception as exc:
                 self.events.put(("error", f"Quote source failed: {exc}"))
         worker = threading.Thread(target=work, name="quote-fetch", daemon=True)
@@ -163,6 +191,11 @@ class WallpaperApp:
         self.save_settings()
         self.events.put(("state", paused))
         self.wake_event.set()
+
+    def set_quote_rotation_interval(self, seconds: int) -> None:
+        self.quote_rotation_interval = max(10, int(seconds))
+        self.save_settings()
+        self.quote_wake_event.set()
 
     def next(self) -> None:
         self._change_wallpaper()
@@ -205,6 +238,17 @@ class WallpaperApp:
             self.wake_event.wait(self.interval)
             self.wake_event.clear()
 
+    def _quote_rotation_loop(self) -> None:
+        while not self.stop_event.is_set():
+            if not self.quote_enabled or not self.quote_providers:
+                self.quote_wake_event.wait(1)
+                self.quote_wake_event.clear()
+                continue
+            self.quote_wake_event.wait(self.quote_rotation_interval)
+            self.quote_wake_event.clear()
+            if not self.stop_event.is_set() and self.quote_enabled:
+                self.fetch_quote()
+
     def _change_wallpaper(self) -> None:
         rows = self.catalog.list_images(["local", "bing", "wallhaven", "reddit"], self.min_width, self.landscape, self.pattern)
         candidates = [Path(row["path"]) for row in rows if Path(row["path"]).is_file() and Path(row["path"]) != self.current]
@@ -213,7 +257,13 @@ class WallpaperApp:
             return
         self._apply(random.choice(candidates))
 
-    def _apply(self, path: Path) -> None:
+    def apply_current(self) -> None:
+        if self.current and self.current.exists():
+            self._apply(self.current, record_history=False)
+        else:
+            self.events.put(("error", "Choose a wallpaper before applying the quote overlay."))
+
+    def _apply(self, path: Path, record_history: bool = True) -> None:
         try:
             wallpaper_path = path
             if self.quote_enabled and self.quote_text.strip():
@@ -225,7 +275,8 @@ class WallpaperApp:
                 set_wallpaper(wallpaper_path)
             self.current = path
             self.catalog.set_setting("current", str(path))
-            self.catalog.record_used(str(path))
+            if record_history:
+                self.catalog.record_used(str(path))
             self.events.put(("current", str(path)))
         except Exception as exc:
             log.exception("Could not set wallpaper")

@@ -6,6 +6,7 @@ from windows_wallpaper.paths import get_paths
 from windows_wallpaper.overlay import render_quote
 from windows_wallpaper.providers import download_image
 from windows_wallpaper.storage import Catalog
+from windows_wallpaper.quotes import funny_quote
 from PIL import Image
 
 
@@ -59,3 +60,19 @@ def test_quote_overlay_writes_a_new_wallpaper_copy(tmp_path):
     assert rendered.exists()
     assert Image.open(source).size == Image.open(rendered).size
     assert source.read_bytes() != rendered.read_bytes()
+
+
+def test_funny_quote_provider_returns_attributed_quote():
+    item = funny_quote()
+    assert item["quote"]
+    assert item["author"]
+    assert item["source"] == "Funny quotes"
+
+
+def test_catalog_persists_quote_rotation_settings(tmp_path):
+    catalog = Catalog(tmp_path / "db.sqlite3")
+    catalog.set_setting("quote_providers", ["quotable", "funny"])
+    catalog.set_setting("quote_rotation_interval", 45)
+    assert catalog.get_setting("quote_providers") == ["quotable", "funny"]
+    assert catalog.get_setting("quote_rotation_interval") == 45
+    catalog.close()

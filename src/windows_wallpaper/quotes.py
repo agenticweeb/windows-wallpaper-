@@ -13,6 +13,13 @@ BUILTIN_QUOTES = [
     ("Make it work, make it right, make it fast.", "Kent Beck"),
 ]
 
+FUNNY_QUOTES = [
+    ("I am not lazy. I am on energy-saving mode.", "Unknown"),
+    ("I finally know what I want: a nap.", "Unknown"),
+    ("My schedule is already full of plans to do things later.", "Unknown"),
+    ("Some people graduate with honors. I graduated with snacks.", "Unknown"),
+]
+
 
 def _quote(quote: str, author: str, source: str) -> dict[str, str]:
     return {"quote": quote.strip(), "author": author.strip() or "Unknown", "source": source}
@@ -65,3 +72,8 @@ def random_custom_quote(path: Path) -> dict[str, str]:
 def fallback_quote() -> dict[str, str]:
     quote, author = random.choice(BUILTIN_QUOTES)
     return _quote(quote, author, "Built-in")
+
+
+def funny_quote() -> dict[str, str]:
+    quote, author = random.choice(FUNNY_QUOTES)
+    return _quote(quote, author, "Funny quotes")
