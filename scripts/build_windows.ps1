@@ -1,5 +1,5 @@
 $ErrorActionPreference = 'Stop'
-$root = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
+$root = Split-Path -Parent $PSScriptRoot
 Set-Location $root
 
 python -m pip install --upgrade pip
